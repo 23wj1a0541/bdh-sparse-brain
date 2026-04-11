@@ -8,7 +8,7 @@ app = Flask(__name__)
 CORS(app)
 
 # Load the JSON data
-with open('bdh/activations.json', 'r', encoding='utf-8') as f:
+with open('activations.json', 'r', encoding='utf-8') as f:
     data = json.load(f)
 
 stored_tokens = list(data.keys())

@@ -293,27 +293,67 @@
     display: grid;
     grid-template-columns: 1.5fr minmax(260px, 1fr);
     gap: 1rem;
+    align-items: start;
+  }
+  .synapse-grid-section {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
   }
   .synapse-grid {
     display: grid;
     grid-template-columns: repeat(8, minmax(0, 1fr));
-    gap: 0.75rem;
+    grid-auto-rows: minmax(3.75rem, auto);
+    gap: 0.5rem;
+    width: 100%;
+    align-items: stretch;
+    justify-items: stretch;
   }
   .synapse-cell {
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 12px;
     background: var(--surface2);
-    padding: 0.85rem 0.85rem;
+    padding: 0.45rem 0.3rem;
+    min-width: 0;
+    min-height: 3.75rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.12rem;
     text-align: center;
     font-size: 0.82rem;
+    line-height: 1.2;
     color: var(--text);
     transition: background 0.18s, border-color 0.18s, color 0.18s;
+  }
+  .synapse-cell-label {
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    line-height: 1.1;
+  }
+  .synapse-cell-num {
+    font-size: clamp(0.72rem, 1.35vw, 0.86rem);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.15;
   }
   .synapse-cell.active {
     background: rgba(29, 158, 117, 0.16);
     border-color: #1D9E75;
     color: var(--bdh);
     box-shadow: inset 0 0 0 1px rgba(29, 158, 117, 0.15);
+  }
+  .synapse-cell.active .synapse-cell-label {
+    color: inherit;
+    opacity: 0.88;
+  }
+  .synapse-cell.active .synapse-cell-num {
+    color: inherit;
   }
   .synapse-sidebar {
     display: flex;
@@ -392,6 +432,20 @@
     .inspector-panel {
       flex: 1 1 100%;
       min-width: auto;
+    }
+  }
+  @media (max-width: 520px) {
+    .synapse-grid {
+      gap: 0.35rem;
+      grid-auto-rows: minmax(3.25rem, auto);
+    }
+    .synapse-cell {
+      min-height: 3.25rem;
+      padding: 0.35rem 0.2rem;
+      border-radius: 10px;
+    }
+    .synapse-cell-label {
+      font-size: 0.55rem;
     }
   }
 
@@ -1474,7 +1528,7 @@
       </div>
 
       <div class="synapse-layout">
-        <div>
+        <div class="synapse-grid-section">
           <div class="sidebar-card sidebar-title">Synapse activation grid</div>
           <div class="synapse-grid" id="synapseGrid"></div>
         </div>
@@ -1708,7 +1762,7 @@
     for (let i = 1; i <= 64; i++) {
       const cell = document.createElement('div');
       cell.className = 'synapse-cell';
-      cell.textContent = `Synapse #${i}`;
+      cell.innerHTML = `<span class="synapse-cell-label">Synapse</span><span class="synapse-cell-num">#${i}</span>`;
       if (activeIndexes.includes(i)) cell.classList.add('active');
       grid.appendChild(cell);
     }
