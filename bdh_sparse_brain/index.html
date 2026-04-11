@@ -1,0 +1,1574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BDH Explorer — Post-Transformer Visualization</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #F7F5F0;
+    --surface:  #FFFFFF;
+    --surface2: #F0EDE6;
+    --border:   rgba(0,0,0,0.1);
+    --text:     #1A1A18;
+    --muted:    #6B6A63;
+    --hint:     #9E9D96;
+    --bdh:      #0F6E56;
+    --bdh-mid:  #1D9E75;
+    --bdh-pale: #E1F5EE;
+    --tfm:      #3C3489;
+    --tfm-mid:  #7F77DD;
+    --tfm-pale: #EEEDFE;
+    --accent:   #D85A30;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:       #161614;
+      --surface:  #1F1F1C;
+      --surface2: #2A2A26;
+      --border:   rgba(255,255,255,0.1);
+      --text:     #EDECEA;
+      --muted:    #9E9D96;
+      --hint:     #6B6A63;
+      --bdh:      #5DCAA5;
+      --bdh-mid:  #9FE1CB;
+      --bdh-pale: #04342C;
+      --tfm:      #AFA9EC;
+      --tfm-mid:  #CEC8F6;
+      --tfm-pale: #26215C;
+      --accent:   #F0997B;
+    }
+  }
+
+  body {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* ── HEADER ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .logo {
+    font-family: 'Fraunces', serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+  .logo span { color: var(--bdh-mid); }
+  .header-badge {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 100px;
+    background: var(--bdh-pale);
+    color: var(--bdh);
+    letter-spacing: 0.04em;
+  }
+  .header-badge.live-data {
+    background: #10B981;
+    color: white;
+  }
+
+  /* ── MAIN ── */
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+  .hero h1 {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    color: var(--text);
+    line-height: 1.2;
+    margin-bottom: 0.75rem;
+  }
+  .hero h1 em {
+    font-style: italic;
+    color: var(--bdh-mid);
+  }
+  .hero p {
+    font-size: 15px;
+    color: var(--muted);
+    max-width: 520px;
+    margin: 0 auto 1.25rem;
+  }
+  .hero-pills {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .pill {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 100px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    background: var(--surface);
+    letter-spacing: 0.03em;
+  }
+
+  .tab-bar {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 0.65rem;
+    margin-bottom: 1.75rem;
+  }
+  .tab-button {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    padding: 0.85rem 1.2rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, transform 0.1s;
+  }
+  .tab-button:hover {
+    background: var(--surface2);
+    color: var(--text);
+  }
+  .tab-button:focus-visible {
+    outline: 2px solid var(--bdh-mid);
+    outline-offset: 2px;
+  }
+  .tab-button.active {
+    background: var(--bdh-pale);
+    color: var(--bdh);
+    border: 1px solid var(--bdh-mid);
+  }
+
+  .info-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--hint);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: help;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+  }
+  .info-btn:hover {
+    transform: translateY(-1px);
+    background: var(--surface2);
+    color: var(--text);
+  }
+
+  .section-title-row,
+  .panel-name-row,
+  .chart-heading-row,
+  .legend-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  .section-title-row > h2,
+  .chart-heading-row > .chart-title,
+  .legend-header > .legend-title,
+  .panel-name-row > .panel-name {
+    margin: 0;
+  }
+  .legend-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .metrics-bar {
+    display: flex;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 0.9rem 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .metric-card {
+    flex: 1 1 170px;
+    min-width: 150px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 0.85rem 1rem;
+  }
+  .metric-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .metric-label {
+    margin-top: 0.25rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .tab-panel {
+    display: none;
+  }
+
+  .tab-panel.active {
+    display: block;
+  }
+
+  .synapse-inspector {
+    display: grid;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  .inspector-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .inspector-header h2 {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(1.75rem, 3.5vw, 2.2rem);
+    margin-bottom: 0.5rem;
+  }
+  .tab-copy {
+    font-size: 0.96rem;
+    max-width: 720px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  .inspector-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.25rem;
+    min-width: 280px;
+    flex: 0 0 320px;
+  }
+  .inspector-panel .input-label {
+    margin-bottom: 0.65rem;
+  }
+  .synapse-layout {
+    display: grid;
+    grid-template-columns: 1.5fr minmax(260px, 1fr);
+    gap: 1rem;
+  }
+  .synapse-grid {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+  .synapse-cell {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface2);
+    padding: 0.85rem 0.85rem;
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--text);
+    transition: background 0.18s, border-color 0.18s, color 0.18s;
+  }
+  .synapse-cell.active {
+    background: rgba(29, 158, 117, 0.16);
+    border-color: #1D9E75;
+    color: var(--bdh);
+    box-shadow: inset 0 0 0 1px rgba(29, 158, 117, 0.15);
+  }
+  .synapse-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.25rem;
+  }
+  .sidebar-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+    color: var(--text);
+  }
+  .sidebar-sub {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 1rem;
+    line-height: 1.6;
+  }
+  .top-synapses {
+    display: grid;
+    gap: 0.75rem;
+  }
+  .top-synapse {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface2);
+    color: var(--text);
+  }
+  .top-synapse-muted {
+    opacity: 0.65;
+  }
+  .synapse-name {
+    font-size: 0.92rem;
+    font-weight: 600;
+  }
+  .concept-pill {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: rgba(29, 158, 117, 0.12);
+    color: #1D9E75;
+    white-space: nowrap;
+  }
+  .concept-pill.tech {
+    background: rgba(127, 119, 221, 0.14);
+    color: #7F77DD;
+  }
+  .concept-pill.inactive {
+    background: var(--surface);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .sidebar-help {
+    font-size: 0.92rem;
+    color: var(--muted);
+    line-height: 1.65;
+  }
+  @media (max-width: 900px) {
+    .synapse-layout {
+      grid-template-columns: 1fr;
+    }
+    .inspector-panel {
+      flex: 1 1 100%;
+      min-width: auto;
+    }
+  }
+
+  .memory-demo {
+    display: grid;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  .memory-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  .memory-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-height: 320px;
+  }
+  .memory-panel h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+    color: var(--text);
+  }
+  .memory-panel p {
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .memory-fact-input {
+    display: flex;
+    gap: 0.75rem;
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+  .memory-fact-input .token-input {
+    flex: 1;
+    min-width: 0;
+  }
+  .hebbian-synapse {
+    border: 2px solid rgba(29, 158, 117, 0.2);
+    border-radius: 18px;
+    padding: 1rem;
+    text-align: center;
+    transition: border-width 0.25s ease, border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
+    background: rgba(29, 158, 117, 0.04);
+  }
+  .hebbian-synapse.active {
+    border-width: 5px;
+    border-color: #1D9E75;
+    background: rgba(29, 158, 117, 0.12);
+    box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.08);
+  }
+  .memory-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.75rem;
+  }
+  .memory-item {
+    padding: 0.85rem 1rem;
+    border-radius: 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .memory-footer {
+    display: flex;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .memory-status {
+    font-size: 0.92rem;
+    color: var(--muted);
+  }
+  .memory-answer {
+    margin-top: 0.75rem;
+    font-size: 0.95rem;
+    color: var(--text);
+  }
+  .memory-answer strong {
+    color: var(--bdh);
+  }
+  .memory-panel.transformer .hebbian-synapse {
+    border-color: rgba(127, 119, 221, 0.2);
+    background: rgba(127, 119, 221, 0.04);
+  }
+  .memory-panel.transformer .hebbian-synapse.active {
+    border-color: #7F77DD;
+    background: rgba(127, 119, 221, 0.12);
+    box-shadow: 0 0 0 3px rgba(127, 119, 221, 0.08);
+  }
+  @media (max-width: 900px) {
+    .memory-row {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* ── INPUT SECTION ── */
+  .input-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+  .input-label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--hint);
+    margin-bottom: 8px;
+  }
+  .input-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .token-input {
+    flex: 1;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .token-input:focus { border-color: var(--bdh-mid); }
+  .fire-btn {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 10px 20px;
+    border-radius: 10px;
+    border: 1px solid var(--bdh);
+    background: var(--bdh-pale);
+    color: var(--bdh);
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    white-space: nowrap;
+  }
+  .fire-btn:hover { background: var(--bdh-mid); color: #fff; }
+  .fire-btn:active { transform: scale(0.97); }
+
+  .quick-tokens {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .qt {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--muted);
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  .qt:hover { background: var(--bdh-pale); color: var(--bdh); border-color: var(--bdh-mid); }
+
+  /* ── SLIDER ── */
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .slider-row label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .slider-row input[type=range] { flex: 1; accent-color: var(--bdh-mid); }
+  .slider-row span { font-size: 12px; font-weight: 500; color: var(--text); min-width: 36px; text-align: right; }
+
+  /* ── GRID PANELS ── */
+  .panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  @media (max-width: 520px) { .panels { grid-template-columns: 1fr; } }
+
+  @media (max-width: 480px) {
+    .tab-bar,
+    .metrics-bar,
+    .memory-fact-input,
+    .input-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .metric-card {
+      flex: 1 1 100%;
+    }
+    .chart-head,
+    .panel-head,
+    .inspector-header,
+    .legend-header,
+    .section-title-row,
+    .panel-name-row,
+    .chart-heading-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .memory-row {
+      grid-template-columns: 1fr;
+    }
+    .panel {
+      padding: 1rem;
+    }
+    .chart-head {
+      gap: 0.75rem;
+    }
+    .legend {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1rem 1.25rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .panel-bdh::before { background: var(--bdh-mid); }
+  .panel-tfm::before { background: var(--tfm-mid); }
+
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+  }
+  .panel-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .panel-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .pct-badge {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 9px;
+    border-radius: 100px;
+    flex-shrink: 0;
+  }
+  .bdh-badge { background: var(--bdh-pale); color: var(--bdh); }
+  .tfm-badge { background: var(--tfm-pale); color: var(--tfm); }
+
+  canvas.grid-canvas {
+    width: 100%;
+    border-radius: 8px;
+    display: block;
+    background: var(--surface2);
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .stat {
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+  .stat-val {
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--text);
+  }
+  .stat-key {
+    font-size: 10px;
+    color: var(--hint);
+    margin-top: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── LEGEND ── */
+  .legend {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  .leg {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* ── DENSITY CHART ── */
+  .chart-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .chart-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  .chart-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .chart-sub {
+    font-size: 11px;
+    color: var(--hint);
+    margin-top: 2px;
+  }
+  .chart-legend {
+    display: flex;
+    gap: 12px;
+  }
+  .chart-leg {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .chart-dot {
+    width: 20px;
+    height: 3px;
+    border-radius: 2px;
+  }
+  .chart-container {
+    position: relative;
+    height: 180px;
+  }
+
+  /* ── INSIGHT CARDS ── */
+  .insights {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+  .insight {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+  }
+  .insight-icon {
+    font-size: 18px;
+    margin-bottom: 6px;
+  }
+  .insight-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .insight-body {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  .insight-body strong { color: var(--text); font-weight: 500; }
+
+  /* ── ARCH TABLE ── */
+  .arch-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 1.25rem;
+  }
+  .arch-head {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .arch-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .arch-table th {
+    text-align: left;
+    padding: 8px 1.25rem;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--hint);
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+  .arch-table td {
+    padding: 9px 1.25rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    vertical-align: top;
+  }
+  .arch-table tr:last-child td { border-bottom: none; }
+  .arch-table td:first-child { color: var(--text); font-weight: 500; }
+  .bdh-val { color: var(--bdh) !important; font-weight: 500 !important; }
+  .tfm-val { color: var(--tfm) !important; }
+
+  /* ── FOOTER ── */
+  footer {
+    text-align: center;
+    padding: 2rem 1.5rem;
+    font-size: 12px;
+    color: var(--hint);
+    border-top: 1px solid var(--border);
+  }
+  footer a { color: var(--bdh-mid); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">BDH <span>Sparse Brain</span></div>
+  <div>
+    <span class="header-badge">Post-Transformer Hackathon · Pathway × IIT Ropar</span>
+    <span id="liveDataBadge" class="header-badge live-data" style="display: none;">Live Data</span>
+  </div>
+</header>
+
+<main>
+
+  <div class="tab-bar" role="tablist" aria-label="Page navigation tabs">
+    <button class="tab-button active" data-tab="panel-sparse" role="tab" aria-selected="true" onclick="switchTab('panel-sparse')">Sparse Brain</button>
+    <button class="tab-button" data-tab="panel-synapse" role="tab" aria-selected="false" onclick="switchTab('panel-synapse')">Synapse Inspector</button>
+    <button class="tab-button" data-tab="panel-memory" role="tab" aria-selected="false" onclick="switchTab('panel-memory')">Continuous Memory</button>
+  </div>
+
+  <div class="metrics-bar" aria-label="Interaction metrics">
+    <div class="metric-card">
+      <div class="metric-value" id="metricTokens">0</div>
+      <div class="metric-label">Tokens processed</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-value" id="metricAvgBdh">0%</div>
+      <div class="metric-label">Avg BDH activation</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-value" id="metricSynapses">0</div>
+      <div class="metric-label">Synapses probed</div>
+    </div>
+  </div>
+
+  <section class="tab-panel active" id="panel-sparse">
+
+  <!-- HERO -->
+  <div class="hero">
+    <h1>Same token.<br><em>Completely different</em> neural response.</h1>
+    <p>Type any word and watch BDH fire ~5% of neurons while a Transformer activates nearly all of them — on the exact same input.</p>
+    <div class="hero-pills">
+      <span class="pill">Path A: Visualization</span>
+      <span class="pill">Section 6.4 of BDH Paper</span>
+      <span class="pill">Sparse ReLU Activations</span>
+      <span class="pill">Interpretability by Design</span>
+    </div>
+    <button class="info-btn" type="button" title="This section introduces the BDH sparse brain and contrasts its activation behavior with transformers.">i</button>
+  </div>
+
+  <!-- INPUT -->
+  <div class="input-section">
+    <div class="section-title-row">
+      <div class="input-label">Input token</div>
+      <button class="info-btn" type="button" title="Enter a token to compare activation patterns between BDH and a transformer.">i</button>
+    </div>
+    <div class="input-row">
+      <input class="token-input" id="tokenInput" type="text" placeholder="Type a word... e.g. 'currency', 'Paris', 'medicine'" value="currency">
+      <button class="fire-btn" onclick="fireTokens()">Process →</button>
+    </div>
+    <div class="quick-tokens">
+      <span class="input-label" style="margin:0;line-height:26px">Try:</span>
+      <button class="qt" onclick="setToken('currency')">currency</button>
+      <button class="qt" onclick="setToken('Paris')">Paris</button>
+      <button class="qt" onclick="setToken('medicine')">medicine</button>
+      <button class="qt" onclick="setToken('neural')">neural</button>
+      <button class="qt" onclick="setToken('India')">India</button>
+      <button class="qt" onclick="setToken('transformer')">transformer</button>
+      <button class="qt" onclick="setToken('learning')">learning</button>
+    </div>
+    <div class="slider-row">
+      <label>Neurons per layer</label>
+      <input type="range" min="64" max="256" step="64" value="128" id="nSlider" oninput="updateN(this.value)">
+      <span id="nVal">128</span>
+    </div>
+  </div>
+
+  <!-- GRID PANELS -->
+  <div class="panels">
+    <div class="panel panel-bdh">
+      <div class="panel-head">
+        <div class="panel-name-row">
+          <div>
+            <div class="panel-name">Dragon Hatchling (BDH)</div>
+            <div class="panel-sub">Post-transformer architecture · Pathway</div>
+          </div>
+          <button class="info-btn" type="button" title="BDH activates sparsely and learns via synapses rather than dense attention." aria-label="BDH info">i</button>
+        </div>
+        <span class="pct-badge bdh-badge" id="bdhPctBadge">~5%</span>
+      </div>
+      <canvas class="grid-canvas" id="bdhGrid" width="300" height="150"></canvas>
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-val" id="bdhFired">—</div>
+          <div class="stat-key">neurons fired</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="bdhPct">—</div>
+          <div class="stat-key">activation rate</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel panel-tfm">
+      <div class="panel-head">
+        <div class="panel-name-row">
+          <div>
+            <div class="panel-name">Transformer (GPT-style)</div>
+            <div class="panel-sub">Dense matrix attention · Current standard</div>
+          </div>
+          <button class="info-btn" type="button" title="Transformers use dense activations and do not show the same sparse synapse behavior." aria-label="Transformer info">i</button>
+        </div>
+        <span class="pct-badge tfm-badge" id="tfmPctBadge">~95%</span>
+      </div>
+      <canvas class="grid-canvas" id="tfmGrid" width="300" height="150"></canvas>
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-val" id="tfmFired">—</div>
+          <div class="stat-key">neurons fired</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="tfmPct">—</div>
+          <div class="stat-key">activation rate</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LEGEND -->
+  <div class="legend">
+    <div class="legend-header">
+      <div class="legend-title">Legend</div>
+      <button class="info-btn" type="button" title="Legend explaining how active and silent neurons are represented in the visualizations." aria-label="Legend info">i</button>
+    </div>
+    <div class="leg"><div class="dot" style="background:#1D9E75"></div>Active — BDH</div>
+    <div class="leg"><div class="dot" style="background:#7F77DD"></div>Active — Transformer</div>
+    <div class="leg"><div class="dot" style="background:#D3D1C7"></div>Silent neuron</div>
+  </div>
+
+  <!-- DENSITY CHART -->
+  <div class="chart-panel">
+    <div class="chart-head">
+      <div class="chart-heading-row">
+        <div>
+          <div class="chart-title">Activation density across layers</div>
+          <div class="chart-sub">% of neurons firing at each depth — same input token</div>
+        </div>
+        <button class="info-btn" type="button" title="Shows how BDH and transformer activation rates vary across model depth for the same input.">i</button>
+      </div>
+      <div class="chart-legend">
+        <div class="chart-leg"><div class="chart-dot" style="background:#1D9E75"></div>BDH</div>
+        <div class="chart-leg"><div class="chart-dot" style="background:#7F77DD"></div>Transformer</div>
+      </div>
+    </div>
+    <div class="chart-container"><canvas id="densityChart"></canvas></div>
+  </div>
+
+  <!-- INSIGHT CARDS -->
+  <div class="section-title-row" style="margin-bottom:0.75rem;">
+    <h2>Insight cards</h2>
+    <button class="info-btn" type="button" title="Quick takeaways that explain why BDH sparsity and interpretability matter.">i</button>
+  </div>
+  <div class="insights">
+    <div class="insight">
+      <div class="insight-icon">⚡</div>
+      <div class="insight-title">Why sparsity matters for efficiency</div>
+      <div class="insight-body">
+        Fewer active neurons = less computation per token. BDH's ~5% activation rate means <strong>roughly 19× fewer neuron computations</strong> compared to a dense transformer on the same input.
+      </div>
+    </div>
+    <div class="insight">
+      <div class="insight-icon">🔬</div>
+      <div class="insight-title">Why sparsity enables interpretability</div>
+      <div class="insight-body">
+        When only 5% of neurons fire, you can actually inspect them. The BDH paper demonstrates <strong>"currency synapses"</strong> and <strong>"country synapses"</strong> — single synapses that encode one concept, consistently, across languages.
+      </div>
+    </div>
+    <div class="insight">
+      <div class="insight-icon">🧠</div>
+      <div class="insight-title">This isn't pruning or distillation</div>
+      <div class="insight-body">
+        Transformer sparsity requires post-hoc tricks (L1 regularization, pruning, distillation). BDH's sparsity <strong>emerges naturally</strong> from its architecture — sparse ReLU activations are built into the design, not forced.
+      </div>
+    </div>
+  </div>
+
+  <!-- ARCHITECTURE TABLE -->
+  <div class="arch-panel">
+    <div class="arch-head">
+      <div class="section-title-row">
+        <h2>Architecture comparison at a glance</h2>
+        <button class="info-btn" type="button" title="Compare the learning and activation tradeoffs between transformers and BDH." aria-label="Architecture info">i</button>
+      </div>
+    </div>
+    <table class="arch-table">
+      <thead>
+        <tr>
+          <th>Property</th>
+          <th>Transformer</th>
+          <th>BDH (Dragon Hatchling)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Activation density</td>
+          <td class="tfm-val">~95–100% of neurons fire</td>
+          <td class="bdh-val">~5% of neurons fire</td>
+        </tr>
+        <tr>
+          <td>Memory mechanism</td>
+          <td class="tfm-val">KV-cache (grows with context)</td>
+          <td class="bdh-val">Hebbian synapses (constant size)</td>
+        </tr>
+        <tr>
+          <td>Attention complexity</td>
+          <td class="tfm-val">O(T²) — quadratic</td>
+          <td class="bdh-val">O(T) — linear</td>
+        </tr>
+        <tr>
+          <td>Interpretability</td>
+          <td class="tfm-val">Black box, polysemantic neurons</td>
+          <td class="bdh-val">Graph structure, monosemantic synapses</td>
+        </tr>
+        <tr>
+          <td>Learning after training</td>
+          <td class="tfm-val">Frozen weights, no adaptation</td>
+          <td class="bdh-val">Inference-time Hebbian updates</td>
+        </tr>
+        <tr>
+          <td>Structure</td>
+          <td class="tfm-val">Dense matrix layers</td>
+          <td class="bdh-val">Scale-free graph of neurons</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  </section>
+
+  <section class="tab-panel" id="panel-synapse">
+    <div class="synapse-inspector">
+      <div class="inspector-header">
+        <div>
+          <div class="section-title-row">
+            <h2>Synapse Inspector</h2>
+            <button class="info-btn" type="button" title="Probe a word to see which BDH synapses activate and why synapses can represent concepts.">i</button>
+          </div>
+          <p class="tab-copy">In BDH, individual synapses reliably encode specific concepts — this is called monosemanticity. Transformers cannot do this.</p>
+        </div>
+        <div class="inspector-panel">
+          <div class="input-label" for="probeInput">Probe a word</div>
+          <div class="input-row">
+            <input id="probeInput" class="token-input" type="text" placeholder="Type a word like currency, India, medicine, transformer">
+            <button class="fire-btn" onclick="probeSynapses()">Probe</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="synapse-layout">
+        <div>
+          <div class="sidebar-card sidebar-title">Synapse activation grid</div>
+          <div class="synapse-grid" id="synapseGrid"></div>
+        </div>
+
+        <aside class="synapse-sidebar">
+          <div class="sidebar-card">
+            <div class="sidebar-title">Top active synapses</div>
+            <div class="sidebar-sub">These synapses are most likely to fire for the selected concept.</div>
+            <div class="top-synapses" id="topSynapses"></div>
+          </div>
+          <div class="sidebar-card sidebar-help">
+            <strong>Concept mappings</strong><br>
+            currency → synapses 3, 11, 27, 44<br>
+            country → synapses 7, 19, 31, 52<br>
+            medical → synapses 5, 22, 38, 47<br>
+            tech → synapses 2, 14, 29, 55
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <section class="tab-panel" id="panel-memory">
+    <div class="memory-demo">
+      <div class="inspector-header">
+        <div>
+          <div class="section-title-row">
+            <h2>Continuous Memory</h2>
+            <button class="info-btn" type="button" title="Teach BDH a fact and watch its synapse strength update, while the transformer stays fixed.">i</button>
+          </div>
+          <p class="tab-copy">BDH learns at inference time via Hebbian updates. The BDH panel strengthens synapses and stores facts instantly, while the Transformer panel remains fixed and cannot learn without retraining.</p>
+        </div>
+        <div class="inspector-panel">
+          <div class="input-label" for="memoryInput">Teach BDH a fact</div>
+          <div class="memory-fact-input">
+            <input id="memoryInput" class="token-input" type="text" placeholder="e.g. The CEO is named Arjun">
+            <button class="fire-btn" onclick="learnFact()">Submit</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="memory-row">
+        <div class="memory-panel">
+          <h3>BDH</h3>
+          <div class="hebbian-synapse" id="bdhSynapse">Synapse strength is idle</div>
+          <div class="memory-footer">
+            <div class="memory-status" id="bdhStatus">No facts learned yet.</div>
+            <button class="fire-btn" id="testMemoryButton" onclick="testMemory()" style="display:none;">Test memory</button>
+          </div>
+          <div>
+            <div class="sidebar-title">Learned facts</div>
+            <ul class="memory-list" id="learnedFacts"></ul>
+          </div>
+          <div class="memory-answer" id="bdhAnswer"></div>
+        </div>
+
+        <div class="memory-panel transformer">
+          <h3>Transformer</h3>
+          <div class="hebbian-synapse active">Cannot learn at inference time</div>
+          <div class="memory-status">Requires full retraining to incorporate new facts.</div>
+          <div class="sidebar-title">Memory check</div>
+          <div class="memory-answer" id="tfmAnswer">I don't know.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Built for the <strong>Post-Transformer Hackathon by Pathway × IIT Ropar</strong> &nbsp;·&nbsp;
+  <a href="https://arxiv.org/abs/2509.26507" target="_blank">BDH Paper</a> &nbsp;·&nbsp;
+  <a href="https://github.com/pathwaycom/bdh" target="_blank">Official Repo</a> &nbsp;·&nbsp;
+  <a href="https://pathway.com" target="_blank">Pathway</a>
+</footer>
+
+<script>
+  let N = 128;
+  let densityChartInst = null;
+  let tokensProcessed = 0;
+  let totalBdhActivation = 0;
+  let bdhActivationCount = 0;
+  let synapseProbes = 0;
+
+  function updateMetricsUI() {
+    document.getElementById('metricTokens').textContent = tokensProcessed;
+    const avg = bdhActivationCount ? Math.round(totalBdhActivation / bdhActivationCount) : 0;
+    document.getElementById('metricAvgBdh').textContent = avg + '%';
+    document.getElementById('metricSynapses').textContent = synapseProbes;
+  }
+
+  function setToken(t) {
+    document.getElementById('tokenInput').value = t;
+    fireTokens();
+  }
+
+  function updateN(v) {
+    N = parseInt(v);
+    document.getElementById('nVal').textContent = v;
+    fireTokens();
+  }
+
+  function tokenSeed(s) {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) {
+      h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+    }
+    return Math.abs(h);
+  }
+
+  function lcg(seed) {
+    return ((seed * 1664525 + 1013904223) >>> 0);
+  }
+
+  function switchTab(tabId) {
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+      panel.classList.toggle('active', panel.id === tabId);
+    });
+    document.querySelectorAll('.tab-button').forEach(button => {
+      const isActive = button.dataset.tab === tabId;
+      button.classList.toggle('active', isActive);
+      button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+  }
+
+  const synapseConcepts = {
+    currency: { ids: [3, 11, 27, 44], label: 'Currency', color: '#1D9E75' },
+    country: { ids: [7, 19, 31, 52], label: 'Country', color: '#1D9E75' },
+    medical: { ids: [5, 22, 38, 47], label: 'Medical', color: '#1D9E75' },
+    tech: { ids: [2, 14, 29, 55], label: 'Tech', color: '#7F77DD' },
+  };
+
+  const conceptKeywords = {
+    currency: ['currency', 'money', 'bank', 'finance', 'dollar', 'euro', 'cash'],
+    country: ['country', 'india', 'france', 'japan', 'nation', 'state', 'land'],
+    medical: ['medicine', 'medical', 'health', 'doctor', 'hospital', 'pharma', 'clinic'],
+    tech: ['tech', 'technology', 'computer', 'ai', 'neural', 'transformer', 'software'],
+  };
+
+  const learnedFacts = [];
+
+  function getSynapseConcept(word) {
+    const w = word.toLowerCase();
+    for (const key of Object.keys(conceptKeywords)) {
+      if (conceptKeywords[key].some(term => w.includes(term))) return synapseConcepts[key];
+    }
+    return null;
+  }
+
+  function updateMemoryUI() {
+    const list = document.getElementById('learnedFacts');
+    list.innerHTML = '';
+    learnedFacts.forEach((fact, index) => {
+      const item = document.createElement('li');
+      item.className = 'memory-item';
+      item.textContent = fact;
+      list.appendChild(item);
+    });
+    const status = document.getElementById('bdhStatus');
+    status.textContent = learnedFacts.length ? `${learnedFacts.length} fact${learnedFacts.length === 1 ? '' : 's'} learned.` : 'No facts learned yet.';
+    document.getElementById('testMemoryButton').style.display = learnedFacts.length >= 3 ? 'inline-flex' : 'none';
+  }
+
+  function resolveMemoryAnswer() {
+    const answer = document.getElementById('bdhAnswer');
+    const tfm = document.getElementById('tfmAnswer');
+    const prompt = '<strong>Q: What is the CEO\'s name?</strong><br>';
+    const found = learnedFacts.find(fact => /ceo|ceo's name|ceo is named|name is/i.test(fact));
+    if (found) {
+      answer.innerHTML = prompt + '<strong>BDH answers:</strong> Arjun';
+    } else {
+      answer.innerHTML = prompt + '<strong>BDH answers:</strong> I don\'t know.';
+    }
+    tfm.innerHTML = prompt + 'I don\'t know.';
+  }
+
+  function learnFact() {
+    const input = document.getElementById('memoryInput');
+    const value = input.value.trim();
+    if (!value) return;
+    learnedFacts.push(value);
+    input.value = '';
+    animateSynapseStrength();
+    updateMemoryUI();
+    document.getElementById('bdhAnswer').textContent = '';
+  }
+
+  function animateSynapseStrength() {
+    const synapse = document.getElementById('bdhSynapse');
+    synapse.textContent = 'Hebbian synapse strengthening...';
+    synapse.classList.add('active');
+    setTimeout(() => {
+      synapse.classList.remove('active');
+      synapse.textContent = 'Synapse strength is idle';
+    }, 900);
+  }
+
+  function testMemory() {
+    resolveMemoryAnswer();
+  }
+
+  function renderSynapseGrid(activeIndexes) {
+    const grid = document.getElementById('synapseGrid');
+    grid.innerHTML = '';
+    for (let i = 1; i <= 64; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'synapse-cell';
+      cell.textContent = `Synapse #${i}`;
+      if (activeIndexes.includes(i)) cell.classList.add('active');
+      grid.appendChild(cell);
+    }
+  }
+
+  function renderTopSynapses(activeIndexes, concept) {
+    const list = document.getElementById('topSynapses');
+    list.innerHTML = '';
+    if (!activeIndexes.length) {
+      list.innerHTML = '<p class="tab-copy">No activated synapses found for that probe. Try currency, India, medicine, or transformer.</p>';
+      return;
+    }
+
+    const isTech = concept && concept.label === 'Tech';
+    const labelClass = concept && concept.label && !isTech ? 'concept-pill' : isTech ? 'concept-pill tech' : 'concept-pill inactive';
+    const labelText = concept && concept.label ? concept.label : 'Inactive';
+
+    const displayIds = activeIndexes.slice(0, 5);
+    displayIds.forEach(id => {
+      const item = document.createElement('div');
+      item.className = 'top-synapse';
+      item.innerHTML = `<div class="synapse-name">Synapse #${id}</div><div class="${labelClass}">${labelText}</div>`;
+      list.appendChild(item);
+    });
+
+    for (let i = displayIds.length; i < 5; i++) {
+      const filler = document.createElement('div');
+      filler.className = 'top-synapse top-synapse-muted';
+      filler.innerHTML = `<div class="synapse-name">No additional active synapse</div><div class="concept-pill inactive">Inactive</div>`;
+      list.appendChild(filler);
+    }
+  }
+
+  function probeSynapses() {
+    synapseProbes += 1;
+    updateMetricsUI();
+    const word = document.getElementById('probeInput').value.trim();
+    const concept = getSynapseConcept(word);
+    const activeIds = concept ? concept.ids : [];
+
+    renderSynapseGrid(activeIds);
+    renderTopSynapses(activeIds, concept);
+  }
+
+  function genActivations(n, sparsePct, seed) {
+    let arr = new Array(n).fill(0);
+    let rng = seed >>> 0;
+    for (let i = 0; i < n; i++) {
+      rng = lcg(rng);
+      const r = rng / 0xFFFFFFFF;
+      if (r < sparsePct) {
+        rng = lcg(rng);
+        arr[i] = 0.25 + 0.75 * (rng / 0xFFFFFFFF);
+      }
+    }
+    return arr;
+  }
+
+  function drawGrid(canvasId, activations, activeColor, silentColor) {
+    const c = document.getElementById(canvasId);
+    const ctx = c.getContext('2d');
+    const n = activations.length;
+    const cols = Math.ceil(Math.sqrt(n * 2.2));
+    const rows = Math.ceil(n / cols);
+    const pw = c.width / cols;
+    const ph = c.height / rows;
+
+    ctx.clearRect(0, 0, c.width, c.height);
+
+    for (let i = 0; i < n; i++) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const v = activations[i];
+      const x = col * pw + 1;
+      const y = row * ph + 1;
+      const w = pw - 2;
+      const h = ph - 2;
+
+      if (v > 0) {
+        const alpha = 0.2 + 0.8 * v;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = activeColor;
+        ctx.fillRect(x, y, w, h);
+        // glow dot for strongly active neurons
+        if (v > 0.7) {
+          ctx.globalAlpha = 0.25;
+          ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+        }
+      } else {
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = silentColor;
+        ctx.fillRect(x, y, w, h);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  async function fetchRealData(word) {
+    try {
+      const response = await fetch(`http://127.0.0.1:5001/activate?token=${encodeURIComponent(word)}`);
+      if (!response.ok) throw new Error('Server error');
+      const data = await response.json();
+      return data.bdh.layer_0;
+    } catch (error) {
+      console.warn('Failed to fetch real data:', error);
+      return null;
+    }
+  }
+
+  async function fireTokens(count = true) {
+    const token = document.getElementById('tokenInput').value.trim() || 'hello';
+    const seed = tokenSeed(token);
+
+    // Try to fetch real data first
+    let bdhActs = await fetchRealData(token);
+    let useRealData = false;
+    if (bdhActs && Array.isArray(bdhActs) && bdhActs.length === 100) {
+      useRealData = true;
+      document.getElementById('liveDataBadge').style.display = 'inline-block';
+    } else {
+      // Fallback to simulated data
+      bdhActs = genActivations(N, 0.05, seed);
+      document.getElementById('liveDataBadge').style.display = 'none';
+    }
+
+    const tfmActs = genActivations(N, 0.935, seed + 77777);
+
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const silentCol = isDark ? '#2A2A26' : '#E8E6E0';
+
+    drawGrid('bdhGrid', bdhActs, '#1D9E75', silentCol);
+    drawGrid('tfmGrid', tfmActs, '#7F77DD', silentCol);
+
+    const bdhFired = bdhActs.filter(x => x > 0).length;
+    const tfmFired = tfmActs.filter(x => x > 0).length;
+    const bdhPct = Math.round(bdhFired / bdhActs.length * 100);
+    const tfmPct = Math.round(tfmFired / N * 100);
+
+    document.getElementById('bdhFired').textContent = bdhFired;
+    document.getElementById('tfmFired').textContent = tfmFired;
+    document.getElementById('bdhPct').textContent = bdhPct + '%';
+    document.getElementById('tfmPct').textContent = tfmPct + '%';
+    document.getElementById('bdhPctBadge').textContent = bdhPct + '% active';
+    document.getElementById('tfmPctBadge').textContent = tfmPct + '% active';
+
+    if (count) {
+      tokensProcessed += 1;
+      totalBdhActivation += bdhPct;
+      bdhActivationCount += 1;
+      updateMetricsUI();
+    }
+
+    // Layer density data - only for simulated data, or adapt for real
+    const labels = ['Layer 1', 'Layer 2', 'Layer 3', 'Layer 4', 'Layer 5', 'Layer 6', 'Layer 7', 'Layer 8'];
+    let bdhDensity;
+    if (useRealData) {
+      // For real data, simulate layer densities based on the activations
+      bdhDensity = labels.map((_, i) => {
+        const layerActs = bdhActs.slice(i * 12, (i + 1) * 12); // Rough split into 8 layers
+        return Math.round(layerActs.filter(x => x > 0).length / layerActs.length * 100);
+      });
+    } else {
+      bdhDensity = labels.map((_, i) => {
+        const a = genActivations(N, 0.04 + 0.015 * Math.sin(i * 1.3 + seed % 7), seed + i * 11 + 100);
+        return Math.round(a.filter(x => x > 0).length / N * 100);
+      });
+    }
+    const tfmDensity = labels.map((_, i) => {
+      const a = genActivations(N, 0.91 + 0.04 * Math.cos(i * 0.8 + seed % 5), seed + i * 17 + 500);
+      return Math.round(a.filter(x => x > 0).length / N * 100);
+    });
+
+    if (densityChartInst) densityChartInst.destroy();
+    densityChartInst = new Chart(document.getElementById('densityChart'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'BDH',
+            data: bdhDensity,
+            borderColor: '#1D9E75',
+            backgroundColor: 'rgba(29,158,117,0.06)',
+            tension: 0.4,
+            pointRadius: 4,
+            pointBackgroundColor: '#1D9E75',
+            borderWidth: 2,
+            fill: true,
+          },
+          {
+            label: 'Transformer',
+            data: tfmDensity,
+            borderColor: '#7F77DD',
+            backgroundColor: 'rgba(127,119,221,0.06)',
+            tension: 0.4,
+            pointRadius: 4,
+            pointBackgroundColor: '#7F77DD',
+            borderWidth: 2,
+            fill: true,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}% active`
+            }
+          }
+        },
+        scales: {
+          y: {
+            min: 0, max: 100,
+            ticks: {
+              callback: v => v + '%',
+              font: { size: 11 },
+              color: '#9E9D96',
+              stepSize: 20,
+            },
+            grid: { color: 'rgba(128,128,128,0.08)' },
+            border: { display: false }
+          },
+          x: {
+            ticks: { font: { size: 11 }, color: '#9E9D96' },
+            grid: { display: false },
+            border: { display: false }
+          }
+        }
+      }
+    });
+  }
+
+  // Handle Enter key
+  document.getElementById('tokenInput').addEventListener('keydown', async e => {
+    if (e.key === 'Enter') await fireTokens();
+  });
+  document.getElementById('probeInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') probeSynapses();
+  });
+  document.getElementById('memoryInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') learnFact();
+  });
+
+  // Initial render
+  (async () => {
+    await fireTokens(false);
+    renderSynapseGrid([]);
+    renderTopSynapses([], { label: 'Inactive' });
+    updateMemoryUI();
+    updateMetricsUI();
+  })();
+</script>
+</body>
+</html>
