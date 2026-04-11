@@ -614,25 +614,68 @@
   }
   .word-matches-row {
     display: none;
-    gap: 6px;
+    flex-direction: column;
+    gap: 10px;
     margin-top: 12px;
+  }
+  .sentence-breakdown-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted);
+  }
+  .sentence-breakdown-label.secondary {
+    margin-top: 4px;
+    opacity: 0.92;
+  }
+  .sentence-token-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    min-height: 2rem;
+  }
+  .sentence-token-chips.empty {
+    color: var(--hint);
+    font-size: 0.88rem;
+    font-style: italic;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  .sentence-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 10px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.88rem;
+    font-weight: 500;
+    line-height: 1.2;
   }
   .word-matches {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-top: 6px;
   }
   .word-match-pill {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    flex-wrap: wrap;
     padding: 7px 10px;
     border-radius: 999px;
     background: var(--surface2);
     border: 1px solid var(--border);
     color: var(--text);
     font-size: 12px;
+  }
+  .word-match-token {
+    font-weight: 600;
+    color: var(--text);
   }
   .word-match-badge {
     display: inline-flex;
@@ -1277,8 +1320,14 @@
       <button class="fire-btn" onclick="fireTokens()">Process →</button>
     </div>
     <div class="word-matches-row" id="wordMatchesRow" style="display:none;">
-      <div class="input-label">Word matches:</div>
-      <div class="word-matches" id="wordMatches"></div>
+      <div>
+        <div class="sentence-breakdown-label">Words in your sentence</div>
+        <div class="sentence-token-chips empty" id="sentenceTokenChips">Type to see each word split out…</div>
+      </div>
+      <div>
+        <div class="sentence-breakdown-label secondary">BDH vocabulary match &amp; relevance</div>
+        <div class="word-matches" id="wordMatches"></div>
+      </div>
     </div>
     <div class="quick-tokens">
       <span class="input-label" style="margin:0;line-height:26px">Try:</span>
@@ -1613,6 +1662,9 @@
   let bdhActivationCount = 0;
   let synapseProbes = 0;
   let textMode = 'word';
+  let cachedStoredTokens = null;
+  let cachedTokensLowerMap = null;
+  let sentencePreviewTimer = null;
   let sigmaHistory = [];
   let currentSigmaToken = '';
   let currentSigmaSnapshot = new Array(1024).fill(0);
@@ -1643,9 +1695,14 @@
     document.getElementById('tokenInput').placeholder = textMode === 'sentence'
       ? 'Type a full sentence...'
       : "Type a word... e.g. 'currency', 'Paris', 'medicine'";
-    document.getElementById('wordMatchesRow').style.display = textMode === 'sentence' ? 'block' : 'none';
+    document.getElementById('wordMatchesRow').style.display = textMode === 'sentence' ? 'flex' : 'none';
     if (textMode === 'word') {
       document.getElementById('wordMatches').innerHTML = '';
+      const chips = document.getElementById('sentenceTokenChips');
+      chips.textContent = 'Type to see each word split out…';
+      chips.classList.add('empty');
+    } else {
+      ensureStoredTokens().then(() => refreshSentencePreview());
     }
     updateBdhSubtitle();
   }
@@ -2085,14 +2142,108 @@
     return { label: 'abstract', color: '#64748B', emoji: '⚪' };
   }
 
-  function renderWordMatches(matches) {
+  function tokenizeSentence(text) {
+    const m = String(text || '').match(/[A-Za-z0-9']+/g);
+    return m || [];
+  }
+
+  async function ensureStoredTokens() {
+    if (cachedStoredTokens) return;
+    try {
+      const response = await fetch('http://127.0.0.1:5001/tokens');
+      if (!response.ok) throw new Error('tokens unavailable');
+      const list = await response.json();
+      if (!Array.isArray(list) || !list.length) throw new Error('empty tokens');
+      cachedStoredTokens = list;
+      cachedTokensLowerMap = Object.fromEntries(list.map(t => [String(t).toLowerCase(), t]));
+    } catch {
+      cachedStoredTokens = null;
+      cachedTokensLowerMap = null;
+    }
+  }
+
+  function findClosestTokenClient(raw) {
+    const stored = cachedStoredTokens;
+    const lowerMap = cachedTokensLowerMap;
+    const t = String(raw || '').trim();
+    if (!t) return raw || '';
+    if (!stored || !stored.length) return t;
+    const token = t.toLowerCase();
+    if (lowerMap[token]) return lowerMap[token];
+
+    const substringCandidates = stored.filter(s => token.includes(s.toLowerCase()));
+    if (substringCandidates.length) {
+      return substringCandidates.reduce((a, b) => (a.length >= b.length ? a : b));
+    }
+    const reverseCandidates = stored.filter(s => s.toLowerCase().includes(token));
+    if (reverseCandidates.length) {
+      return reverseCandidates.reduce((a, b) => (a.length >= b.length ? a : b));
+    }
+    const currencyHints = ['dollar', 'euro', 'rupee', 'price', 'cost', 'pay', 'bucks', 'pound', 'yen'];
+    if (currencyHints.some(w => token.includes(w)) && lowerMap.currency) return lowerMap.currency;
+    const parisHints = ['paris', 'france', 'eiffel', 'seine'];
+    if (parisHints.some(w => token.includes(w)) && lowerMap.paris) return lowerMap.paris;
+    const indiaHints = ['india', 'delhi', 'mumbai', 'bangalore', 'karnataka', 'kerala'];
+    if (indiaHints.some(w => token.includes(w)) && lowerMap.india) return lowerMap.india;
+    return stored[0];
+  }
+
+  function renderSentenceTokenChips(words) {
+    const el = document.getElementById('sentenceTokenChips');
+    el.classList.toggle('empty', !words.length);
+    el.innerHTML = '';
+    if (!words.length) {
+      el.textContent = 'Type to see each word split out…';
+      return;
+    }
+    words.forEach(w => {
+      const chip = document.createElement('span');
+      chip.className = 'sentence-chip';
+      chip.textContent = w;
+      el.appendChild(chip);
+    });
+  }
+
+  async function refreshSentencePreview() {
+    if (textMode !== 'sentence') return;
+    await ensureStoredTokens();
+    const text = document.getElementById('tokenInput').value;
+    const words = tokenizeSentence(text);
+    renderSentenceTokenChips(words);
+    const matches = {};
+    words.forEach(w => {
+      matches[w] = findClosestTokenClient(w);
+    });
+    renderWordMatches(matches, words);
+  }
+
+  function scheduleSentencePreview() {
+    if (textMode !== 'sentence') return;
+    clearTimeout(sentencePreviewTimer);
+    sentencePreviewTimer = setTimeout(() => refreshSentencePreview(), 100);
+  }
+
+  function renderWordMatches(matches, wordOrder) {
     const container = document.getElementById('wordMatches');
     container.innerHTML = '';
-    Object.entries(matches).forEach(([word, matchedToken]) => {
+    const keys = (wordOrder && wordOrder.length)
+      ? wordOrder.filter(w => Object.prototype.hasOwnProperty.call(matches, w))
+      : Object.keys(matches);
+    if (!keys.length) {
+      const hint = document.createElement('span');
+      hint.className = 'tab-copy';
+      hint.style.fontSize = '0.85rem';
+      hint.textContent = 'No words yet — add text above.';
+      container.appendChild(hint);
+      return;
+    }
+    keys.forEach(word => {
+      const matchedToken = matches[word];
       const category = getWordMatchCategory(matchedToken);
       const pill = document.createElement('span');
       pill.className = 'word-match-pill';
-      pill.innerHTML = `${word} → <span class="word-match-badge ${category.label}" style="background:${category.color};">${category.emoji} ${category.label}</span>`;
+      const escapedWord = word.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      pill.innerHTML = `${escapedWord} → <span class="word-match-token">${String(matchedToken).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span> · <span class="word-match-badge ${category.label}" style="background:${category.color};">${category.emoji} ${category.label}</span>`;
       container.appendChild(pill);
     });
   }
@@ -2115,10 +2266,11 @@
       textMode = 'word';
       const fallback = await fireTokens(count);
       textMode = previousMode;
+      if (textMode === 'sentence') refreshSentencePreview();
       return fallback;
     }
 
-    const bdhActs = responseData && responseData.averaged && Array.isArray(responseData.averaged.layer_0)
+    let bdhActs = responseData && responseData.averaged && Array.isArray(responseData.averaged.layer_0)
       ? responseData.averaged.layer_0
       : genActivations(N, 0.05, tokenSeed(text));
 
@@ -2167,10 +2319,15 @@
       updateMetricsUI();
     }
 
-    const wordCount = responseData && responseData.word_matches
-      ? Object.keys(responseData.word_matches).length
-      : text.split(/\s+/).filter(Boolean).length;
-    renderWordMatches(responseData && responseData.word_matches ? responseData.word_matches : {});
+    const sentenceWords = tokenizeSentence(text);
+    renderSentenceTokenChips(sentenceWords);
+    await ensureStoredTokens();
+    const wm = { ...(responseData && responseData.word_matches ? responseData.word_matches : {}) };
+    sentenceWords.forEach(w => {
+      if (wm[w] === undefined) wm[w] = findClosestTokenClient(w);
+    });
+    const wordCount = Object.keys(wm).length || sentenceWords.length;
+    renderWordMatches(wm, sentenceWords);
     updateBdhSubtitle(wordCount);
 
     const labels = ['Layer 1', 'Layer 2', 'Layer 3', 'Layer 4', 'Layer 5', 'Layer 6', 'Layer 7', 'Layer 8'];
@@ -2402,6 +2559,9 @@
   // Handle Enter key
   document.getElementById('tokenInput').addEventListener('keydown', async e => {
     if (e.key === 'Enter') await fireTokens();
+  });
+  document.getElementById('tokenInput').addEventListener('input', () => {
+    if (textMode === 'sentence') scheduleSentencePreview();
   });
   document.getElementById('probeInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') probeSynapses();

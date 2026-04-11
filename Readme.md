@@ -155,8 +155,10 @@ The Dragon Hatchling (BDH) is a post-transformer architecture by [Pathway](https
 
 | Name | Role |
 |---|---|
-| [Your Name] | Frontend & Visualization |
-| [Teammate Name] | ML Architecture & Research |
+| [Kuldeep Reddy] | ML Architecture |
+| [Arun Sai Challa] | Front-End |
+| [Abhinav Gajavelli] |  Visualization |
+| [Mahesh Bommagani] | Research |
 
 > *Built for the Post-Transformer Hackathon by Pathway at IIT Ropar*
 
