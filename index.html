@@ -905,6 +905,109 @@
     height: 180px;
   }
 
+  .sigma-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .sigma-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  .sigma-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .sigma-sub {
+    font-size: 11px;
+    color: var(--hint);
+    margin-top: 2px;
+  }
+  .sigma-description {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+  .sigma-grid {
+    display: grid;
+    grid-template-columns: repeat(32, minmax(8px, 1fr));
+    gap: 1px;
+    width: 100%;
+    min-height: 280px;
+    background: #0b160f;
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .sigma-cell {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 2px;
+    transition: opacity 0.3s ease, background-color 0.3s ease;
+    opacity: 1;
+    background: #0b160f;
+  }
+  .sigma-tooltip {
+    position: fixed;
+    z-index: 999;
+    display: none;
+    max-width: 240px;
+    background: rgba(20,20,20,0.95);
+    color: white;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    box-shadow: 0 14px 32px rgba(0,0,0,0.25);
+    pointer-events: none;
+  }
+  .sigma-history-row {
+    margin-top: 18px;
+  }
+  .sigma-history {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  .sigma-history-item {
+    display: inline-flex;
+    flex-direction: column;
+    width: 120px;
+    cursor: pointer;
+  }
+  .sigma-history-item.active {
+    outline: 2px solid var(--bdh-mid);
+    outline-offset: 4px;
+  }
+  .sigma-thumb {
+    display: grid;
+    grid-template-columns: repeat(32, 1fr);
+    gap: 1px;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background: #0b160f;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .sigma-thumb-cell {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 1px;
+    transition: background-color 0.2s ease;
+  }
+  .sigma-thumb-label {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text);
+    text-align: center;
+    word-break: break-word;
+  }
+
   /* ── INSIGHT CARDS ── */
   .insights {
     display: grid;
@@ -1164,6 +1267,23 @@
     <div class="chart-container"><canvas id="densityChart"></canvas></div>
   </div>
 
+  <div class="sigma-panel">
+    <div class="sigma-head">
+      <div>
+        <div class="sigma-title">Hebbian Memory — σ Matrix</div>
+        <div class="sigma-sub">Synaptic state for the last matched token</div>
+      </div>
+      <button class="info-btn" type="button" title="Each cell shows a synaptic association between two neurons for the current token.">i</button>
+    </div>
+    <div class="sigma-description">Each cell shows how strongly two neurons wired together processing this token. Brighter = stronger synaptic bond. This is Hebbian learning made visible.</div>
+    <div class="sigma-grid" id="sigmaGrid" role="grid" aria-label="Hebbian sigma matrix heatmap"></div>
+    <div id="sigmaTooltip" class="sigma-tooltip" aria-hidden="true"></div>
+    <div class="sigma-history-row" id="sigmaHistoryRow">
+      <div class="input-label">Memory History</div>
+      <div class="sigma-history" id="sigmaHistory"></div>
+    </div>
+  </div>
+
   <!-- INSIGHT CARDS -->
   <div class="section-title-row" style="margin-bottom:0.75rem;">
     <h2>Insight cards</h2>
@@ -1351,6 +1471,9 @@
   let bdhActivationCount = 0;
   let synapseProbes = 0;
   let textMode = 'word';
+  let sigmaHistory = [];
+  let currentSigmaToken = '';
+  let currentSigmaSnapshot = new Array(1024).fill(0);
   const defaultBdhSubtitle = 'Post-transformer architecture · Pathway';
 
   function updateMetricsUI() {
@@ -1570,8 +1693,9 @@
     return Math.floor(index / 10) + 1;
   }
 
-  function positionTooltip(evt) {
-    const tooltip = document.getElementById('neuronTooltip');
+  function positionTooltip(evt, tooltipId = 'neuronTooltip') {
+    const tooltip = document.getElementById(tooltipId);
+    if (!tooltip) return;
     const pad = 12;
     const rect = tooltip.getBoundingClientRect();
     let x = evt.clientX + 16;
@@ -1636,6 +1760,114 @@
       cell.addEventListener('mouseleave', hideNeuronTooltip);
       container.appendChild(cell);
     }
+  }
+
+  function getSigmaColor(value) {
+    const alpha = 0.15 + 0.75 * value;
+    return value > 0 ? `rgba(29,158,117,${alpha})` : '#0b160f';
+  }
+
+  function showSigmaTooltip(evt, i, j, value, token) {
+    const tooltip = document.getElementById('sigmaTooltip');
+    tooltip.innerHTML = `
+      <div class="tooltip-row"><strong>Synapse [${i}→${j}]</strong></div>
+      <div class="tooltip-row">strength ${value.toFixed(2)}</div>
+      <div class="tooltip-note">formed when neurons ${i} and ${j} co-activated on token: ${token}</div>
+    `;
+    tooltip.style.display = 'block';
+    tooltip.setAttribute('aria-hidden', 'false');
+    positionTooltip(evt, 'sigmaTooltip');
+  }
+
+  function hideSigmaTooltip() {
+    const tooltip = document.getElementById('sigmaTooltip');
+    tooltip.style.display = 'none';
+    tooltip.setAttribute('aria-hidden', 'true');
+  }
+
+  function renderSigmaGrid(snapshot, token, animate = true) {
+    const container = document.getElementById('sigmaGrid');
+    if (!container) return;
+    currentSigmaSnapshot = Array.isArray(snapshot) ? snapshot.slice(0, 1024) : new Array(1024).fill(0);
+    currentSigmaToken = token || currentSigmaToken;
+    const length = 1024;
+    const cells = container.children;
+    const createCells = cells.length !== length;
+
+    if (createCells) {
+      container.innerHTML = '';
+      for (let idx = 0; idx < length; idx++) {
+        const cell = document.createElement('div');
+        cell.className = 'sigma-cell';
+        cell.dataset.index = idx;
+        const i = Math.floor(idx / 32);
+        const j = idx % 32;
+        cell.addEventListener('mouseenter', e => showSigmaTooltip(e, i, j, currentSigmaSnapshot[idx], currentSigmaToken));
+        cell.addEventListener('mousemove', e => positionTooltip(e, 'sigmaTooltip'));
+        cell.addEventListener('mouseleave', hideSigmaTooltip);
+        container.appendChild(cell);
+      }
+    }
+
+    const allCells = Array.from(container.children);
+    if (animate) {
+      allCells.forEach(cell => { cell.style.opacity = '0'; });
+      window.setTimeout(() => {
+        allCells.forEach((cell, idx) => {
+          const value = snapshot[idx] || 0;
+          cell.style.backgroundColor = getSigmaColor(value);
+          cell.dataset.value = value.toFixed(4);
+          cell.style.opacity = '1';
+        });
+      }, 300);
+    } else {
+      allCells.forEach((cell, idx) => {
+        const value = snapshot[idx] || 0;
+        cell.style.backgroundColor = getSigmaColor(value);
+        cell.dataset.value = value.toFixed(4);
+        cell.style.opacity = '1';
+      });
+    }
+    currentSigmaToken = token;
+  }
+
+  function addSigmaHistoryEntry(token, snapshot) {
+    sigmaHistory.unshift({ token, snapshot: Array.isArray(snapshot) ? snapshot.slice(0, 1024) : new Array(1024).fill(0) });
+    sigmaHistory = sigmaHistory.slice(0, 5);
+    renderSigmaHistory();
+  }
+
+  function renderSigmaHistory() {
+    const container = document.getElementById('sigmaHistory');
+    if (!container) return;
+    container.innerHTML = '';
+    sigmaHistory.forEach((entry, index) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'sigma-history-item' + (entry.token === currentSigmaToken ? ' active' : '');
+      item.addEventListener('click', () => {
+        renderSigmaGrid(entry.snapshot, entry.token, true);
+        renderSigmaHistory();
+      });
+
+      const thumb = document.createElement('div');
+      thumb.className = 'sigma-thumb';
+      for (let idx = 0; idx < 1024; idx++) {
+        const cell = document.createElement('div');
+        cell.className = 'sigma-thumb-cell';
+        const value = entry.snapshot[idx] || 0;
+        cell.style.backgroundColor = getSigmaColor(value);
+        thumb.appendChild(cell);
+      }
+
+      const label = document.createElement('div');
+      label.className = 'sigma-thumb-label';
+      label.textContent = entry.token;
+
+      item.appendChild(thumb);
+      item.appendChild(label);
+      container.appendChild(item);
+    });
   }
 
   function getWordMatchCategory(token) {
@@ -1789,8 +2021,7 @@
     try {
       const response = await fetch(`http://127.0.0.1:5001/activate?token=${encodeURIComponent(word)}`);
       if (!response.ok) throw new Error('Server error');
-      const data = await response.json();
-      return data.bdh.layer_0;
+      return await response.json();
     } catch (error) {
       console.warn('Failed to fetch real data:', error);
       return null;
@@ -1802,14 +2033,19 @@
     const token = document.getElementById('tokenInput').value.trim() || 'hello';
     const seed = tokenSeed(token);
 
-    // Try to fetch real data first
-    let bdhActs = await fetchRealData(token);
+    let responseData = await fetchRealData(token);
+    let bdhActs = null;
     let useRealData = false;
-    if (bdhActs && Array.isArray(bdhActs) && bdhActs.length === 100) {
+    let matchedToken = token;
+    let sigmaSnapshot = null;
+
+    if (responseData && responseData.bdh && Array.isArray(responseData.bdh.layer_0) && responseData.bdh.layer_0.length === 100) {
       useRealData = true;
+      matchedToken = responseData.matched_token || token;
+      bdhActs = responseData.bdh.layer_0;
+      sigmaSnapshot = Array.isArray(responseData.sigma_snapshot) ? responseData.sigma_snapshot : null;
       document.getElementById('liveDataBadge').style.display = 'inline-block';
     } else {
-      // Fallback to simulated data
       bdhActs = genActivations(N, 0.05, seed);
       document.getElementById('liveDataBadge').style.display = 'none';
     }
@@ -1821,6 +2057,13 @@
 
     drawGrid('bdhGrid', bdhActs, '#1D9E75', bdhSilentColor);
     drawGrid('tfmGrid', tfmActs, '#7F77DD', tfmSilentColor);
+
+    if (sigmaSnapshot && sigmaSnapshot.length === 1024) {
+      renderSigmaGrid(sigmaSnapshot, matchedToken, true);
+      addSigmaHistoryEntry(matchedToken, sigmaSnapshot);
+    } else {
+      renderSigmaGrid(new Array(1024).fill(0), matchedToken, false);
+    }
 
     const bdhFired = bdhActs.filter(x => x > 0).length;
     const tfmFired = tfmActs.filter(x => x > 0).length;
@@ -1845,9 +2088,8 @@
     const labels = ['Layer 1', 'Layer 2', 'Layer 3', 'Layer 4', 'Layer 5', 'Layer 6', 'Layer 7', 'Layer 8'];
     let bdhDensity;
     if (useRealData) {
-      // For real data, simulate layer densities based on the activations
       bdhDensity = labels.map((_, i) => {
-        const layerActs = bdhActs.slice(i * 12, (i + 1) * 12); // Rough split into 8 layers
+        const layerActs = bdhActs.slice(i * 12, (i + 1) * 12);
         return Math.round(layerActs.filter(x => x > 0).length / layerActs.length * 100);
       });
     } else {

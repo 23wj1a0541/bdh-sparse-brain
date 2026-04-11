@@ -60,6 +60,15 @@ def find_closest_token(raw_token):
 
     return random.choice(stored_tokens)
 
+
+def build_sigma_snapshot(layer_0):
+    first32 = layer_0[:32] if len(layer_0) >= 32 else layer_0 + [0.0] * (32 - len(layer_0))
+    snapshot = []
+    for i in range(32):
+        for j in range(32):
+            snapshot.append(first32[i] * first32[j])
+    return snapshot
+
 @app.route('/activate')
 def activate():
     raw_token = request.args.get('token', '').strip()
@@ -68,6 +77,7 @@ def activate():
         'matched_token': matched_token,
         'bdh': data[matched_token],
         'transformer': {'density': [0.95]},
+        'sigma_snapshot': build_sigma_snapshot(data[matched_token]['layer_0']),
         'source': 'real'
     })
 
