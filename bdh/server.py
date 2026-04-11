@@ -63,11 +63,41 @@ def find_closest_token(raw_token):
 
 def build_sigma_snapshot(layer_0):
     first32 = layer_0[:32] if len(layer_0) >= 32 else layer_0 + [0.0] * (32 - len(layer_0))
-    snapshot = []
+    raw_values = []
     for i in range(32):
         for j in range(32):
-            snapshot.append(first32[i] * first32[j])
-    return snapshot
+            if i == j:
+                raw_values.append(0.0)
+            else:
+                value = first32[i] * first32[j]
+                value = value * value
+                value += random.uniform(0, 0.05)
+                raw_values.append(value)
+
+    non_diag = [v for v in raw_values if v > 0]
+    if not non_diag:
+        return raw_values
+
+    sorted_values = sorted(non_diag)
+    threshold_index = max(0, int(len(sorted_values) * 0.9) - 1)
+    threshold = sorted_values[threshold_index]
+    max_value = sorted_values[-1]
+    min_value = sorted_values[0]
+
+    scaled_snapshot = []
+    for idx, value in enumerate(raw_values):
+        if value == 0.0:
+            scaled_snapshot.append(0.0)
+            continue
+
+        if value <= threshold:
+            fade = threshold if threshold > 0 else 1.0
+            scaled_snapshot.append(((value / fade) ** 2) * 0.35)
+        else:
+            bright_range = max_value - threshold if max_value > threshold else threshold
+            scaled_snapshot.append(0.35 + 0.65 * ((value - threshold) / bright_range))
+
+    return scaled_snapshot
 
 @app.route('/activate')
 def activate():
