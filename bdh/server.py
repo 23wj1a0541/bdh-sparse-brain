@@ -8,7 +8,7 @@ app = Flask(__name__)
 CORS(app)
 
 # Load the JSON data
-with open('activations.json', 'r', encoding='utf-8') as f:
+with open('bdh/activations.json', 'r', encoding='utf-8') as f:
     data = json.load(f)
 
 stored_tokens = list(data.keys())
@@ -63,6 +63,11 @@ def find_closest_token(raw_token):
 
 def build_sigma_snapshot(layer_0):
     first32 = layer_0[:32] if len(layer_0) >= 32 else layer_0 + [0.0] * (32 - len(layer_0))
+    # Threshold to top 5% active
+    if first32:
+        sorted_vals = sorted(first32, reverse=True)
+        threshold = sorted_vals[min(len(sorted_vals) - 1, int(len(first32) * 0.05))]
+        first32 = [v if v >= threshold else 0.0 for v in first32]
     raw_values = []
     for i in range(32):
         for j in range(32):

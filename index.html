@@ -1787,9 +1787,9 @@
     const pad = 12;
     const rect = tooltip.getBoundingClientRect();
     let x = evt.clientX + 16;
-    let y = evt.clientY + 16;
+    let y = evt.clientY - rect.height - 16;
     if (x + rect.width + pad > window.innerWidth) x = window.innerWidth - rect.width - pad;
-    if (y + rect.height + pad > window.innerHeight) y = evt.clientY - rect.height - 16;
+    if (y < pad) y = evt.clientY + 16;
     tooltip.style.left = `${Math.max(8, x)}px`;
     tooltip.style.top = `${Math.max(8, y)}px`;
   }
@@ -2068,6 +2068,23 @@
       ? responseData.averaged.layer_0
       : genActivations(N, 0.05, tokenSeed(text));
 
+    // Threshold BDH to top 5% active for sparse display
+    if (bdhActs.length > 0) {
+      const sorted = [...bdhActs].sort((a, b) => b - a);
+      const thresholdIndex = Math.min(sorted.length - 1, Math.floor(bdhActs.length * 0.05));
+      const threshold = sorted[thresholdIndex];
+      bdhActs = bdhActs.map(v => v >= threshold ? v : 0);
+    }
+
+    // Adjust to match N
+    if (bdhActs.length !== N) {
+      if (bdhActs.length < N) {
+        bdhActs = bdhActs.concat(new Array(N - bdhActs.length).fill(0));
+      } else {
+        bdhActs = bdhActs.slice(0, N);
+      }
+    }
+
     const tfmActs = genActivations(N, 0.935, tokenSeed(text) + 77777);
     const bdhSilentColor = '#2A3A30';
     const tfmSilentColor = '#1A1830';
@@ -2191,6 +2208,23 @@
     } else {
       bdhActs = genActivations(N, 0.05, seed);
       document.getElementById('liveDataBadge').style.display = 'none';
+    }
+
+    // Threshold BDH to top 5% active for sparse display
+    if (bdhActs.length > 0) {
+      const sorted = [...bdhActs].sort((a, b) => b - a);
+      const thresholdIndex = Math.min(sorted.length - 1, Math.floor(bdhActs.length * 0.05));
+      const threshold = sorted[thresholdIndex];
+      bdhActs = bdhActs.map(v => v >= threshold ? v : 0);
+    }
+
+    // Adjust to match N
+    if (bdhActs.length !== N) {
+      if (bdhActs.length < N) {
+        bdhActs = bdhActs.concat(new Array(N - bdhActs.length).fill(0));
+      } else {
+        bdhActs = bdhActs.slice(0, N);
+      }
     }
 
     const tfmActs = genActivations(N, 0.935, seed + 77777);
