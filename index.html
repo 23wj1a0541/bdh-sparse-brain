@@ -531,6 +531,71 @@
     transition: border-color 0.15s;
   }
   .token-input:focus { border-color: var(--bdh-mid); }
+  .mode-toggle-group {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 6px;
+    align-self: stretch;
+    justify-content: center;
+  }
+  .mode-toggle {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .mode-toggle.active {
+    background: var(--bdh-pale);
+    color: var(--bdh);
+    border-color: var(--bdh-mid);
+  }
+  .mode-toggle:hover {
+    background: var(--surface);
+  }
+  .word-matches-row {
+    display: none;
+    gap: 6px;
+    margin-top: 12px;
+  }
+  .word-matches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .word-match-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 999px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 12px;
+  }
+  .word-match-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 6px;
+    border-radius: 999px;
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .word-match-badge.currency { background: #10B981; }
+  .word-match-badge.geography { background: #7F77DD; }
+  .word-match-badge.medical { background: #F59E0B; }
+  .word-match-badge.language { background: #8B5CF6; }
+  .word-match-badge.syntax { background: #14B8A6; }
+  .word-match-badge.abstract { background: #64748B; }
   .fire-btn {
     font-family: 'DM Sans', sans-serif;
     font-size: 14px;
@@ -980,7 +1045,15 @@
     </div>
     <div class="input-row">
       <input class="token-input" id="tokenInput" type="text" placeholder="Type a word... e.g. 'currency', 'Paris', 'medicine'" value="currency">
+      <div class="mode-toggle-group" role="group" aria-label="Text mode toggle">
+        <button type="button" class="mode-toggle active" id="wordModeBtn" onclick="setTextMode('word')">Word Mode</button>
+        <button type="button" class="mode-toggle" id="sentenceModeBtn" onclick="setTextMode('sentence')">Sentence Mode</button>
+      </div>
       <button class="fire-btn" onclick="fireTokens()">Process →</button>
+    </div>
+    <div class="word-matches-row" id="wordMatchesRow" style="display:none;">
+      <div class="input-label">Word matches:</div>
+      <div class="word-matches" id="wordMatches"></div>
     </div>
     <div class="quick-tokens">
       <span class="input-label" style="margin:0;line-height:26px">Try:</span>
@@ -1006,7 +1079,7 @@
         <div class="panel-name-row">
           <div>
             <div class="panel-name">Dragon Hatchling (BDH)</div>
-            <div class="panel-sub">Post-transformer architecture · Pathway</div>
+            <div class="panel-sub" id="bdhSubtitle">Post-transformer architecture · Pathway</div>
           </div>
           <button class="info-btn" type="button" title="BDH activates sparsely and learns via synapses rather than dense attention." aria-label="BDH info">i</button>
         </div>
@@ -1277,6 +1350,8 @@
   let totalBdhActivation = 0;
   let bdhActivationCount = 0;
   let synapseProbes = 0;
+  let textMode = 'word';
+  const defaultBdhSubtitle = 'Post-transformer architecture · Pathway';
 
   function updateMetricsUI() {
     document.getElementById('metricTokens').textContent = tokensProcessed;
@@ -1294,6 +1369,27 @@
     N = parseInt(v);
     document.getElementById('nVal').textContent = v;
     fireTokens();
+  }
+
+  function setTextMode(mode) {
+    textMode = mode === 'sentence' ? 'sentence' : 'word';
+    document.getElementById('wordModeBtn').classList.toggle('active', textMode === 'word');
+    document.getElementById('sentenceModeBtn').classList.toggle('active', textMode === 'sentence');
+    document.getElementById('tokenInput').placeholder = textMode === 'sentence'
+      ? 'Type a full sentence...'
+      : "Type a word... e.g. 'currency', 'Paris', 'medicine'";
+    document.getElementById('wordMatchesRow').style.display = textMode === 'sentence' ? 'block' : 'none';
+    if (textMode === 'word') {
+      document.getElementById('wordMatches').innerHTML = '';
+    }
+    updateBdhSubtitle();
+  }
+
+  function updateBdhSubtitle(tokenCount = 0) {
+    const subtitle = document.getElementById('bdhSubtitle');
+    subtitle.textContent = textMode === 'sentence'
+      ? `Averaged across ${tokenCount} token${tokenCount === 1 ? '' : 's'}`
+      : defaultBdhSubtitle;
   }
 
   function tokenSeed(s) {
@@ -1542,6 +1638,153 @@
     }
   }
 
+  function getWordMatchCategory(token) {
+    const lower = token.toLowerCase();
+    if (lower.includes('currency') || lower.includes('dollar') || lower.includes('euro') || lower.includes('rupee') || lower.includes('price') || lower.includes('cost') || lower.includes('pay') || lower.includes('bucks')) {
+      return { label: 'currency', color: '#10B981', emoji: '🟢' };
+    }
+    if (lower.includes('paris') || lower.includes('india') || lower.includes('france') || lower.includes('country') || lower.includes('city')) {
+      return { label: 'geography', color: '#7F77DD', emoji: '🟣' };
+    }
+    if (lower.includes('medical') || lower.includes('medicine') || lower.includes('health') || lower.includes('doctor')) {
+      return { label: 'medical', color: '#F59E0B', emoji: '🟠' };
+    }
+    if (lower.includes('neural') || lower.includes('transformer') || lower.includes('language') || lower.includes('learning')) {
+      return { label: 'language', color: '#8B5CF6', emoji: '🟣' };
+    }
+    if (lower.includes('syntax') || lower.includes('structure')) {
+      return { label: 'syntax', color: '#14B8A6', emoji: '🟢' };
+    }
+    return { label: 'abstract', color: '#64748B', emoji: '⚪' };
+  }
+
+  function renderWordMatches(matches) {
+    const container = document.getElementById('wordMatches');
+    container.innerHTML = '';
+    Object.entries(matches).forEach(([word, matchedToken]) => {
+      const category = getWordMatchCategory(matchedToken);
+      const pill = document.createElement('span');
+      pill.className = 'word-match-pill';
+      pill.innerHTML = `${word} → <span class="word-match-badge ${category.label}" style="background:${category.color};">${category.emoji} ${category.label}</span>`;
+      container.appendChild(pill);
+    });
+  }
+
+  async function fireSentence(count = true) {
+    const text = document.getElementById('tokenInput').value.trim() || 'hello';
+    let responseData = null;
+
+    try {
+      const response = await fetch('http://127.0.0.1:5001/activate_text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      if (!response.ok) throw new Error('Server error');
+      responseData = await response.json();
+    } catch (error) {
+      console.warn('Sentence mode request failed:', error);
+      const previousMode = textMode;
+      textMode = 'word';
+      const fallback = await fireTokens(count);
+      textMode = previousMode;
+      return fallback;
+    }
+
+    const bdhActs = responseData && responseData.averaged && Array.isArray(responseData.averaged.layer_0)
+      ? responseData.averaged.layer_0
+      : genActivations(N, 0.05, tokenSeed(text));
+
+    const tfmActs = genActivations(N, 0.935, tokenSeed(text) + 77777);
+    const bdhSilentColor = '#2A3A30';
+    const tfmSilentColor = '#1A1830';
+
+    drawGrid('bdhGrid', bdhActs, '#1D9E75', bdhSilentColor);
+    drawGrid('tfmGrid', tfmActs, '#7F77DD', tfmSilentColor);
+
+    const bdhFired = bdhActs.filter(x => x > 0).length;
+    const tfmFired = tfmActs.filter(x => x > 0).length;
+    const bdhPct = Math.round(bdhFired / bdhActs.length * 100);
+    const tfmPct = Math.round(tfmFired / N * 100);
+
+    document.getElementById('bdhFired').textContent = bdhFired;
+    document.getElementById('tfmFired').textContent = tfmFired;
+    document.getElementById('bdhPct').textContent = bdhPct + '%';
+    document.getElementById('tfmPct').textContent = tfmPct + '%';
+    document.getElementById('bdhPctBadge').textContent = bdhPct + '% active';
+    document.getElementById('tfmPctBadge').textContent = tfmPct + '% active';
+
+    if (count) {
+      tokensProcessed += 1;
+      totalBdhActivation += bdhPct;
+      bdhActivationCount += 1;
+      updateMetricsUI();
+    }
+
+    const wordCount = responseData && responseData.word_matches
+      ? Object.keys(responseData.word_matches).length
+      : text.split(/\s+/).filter(Boolean).length;
+    renderWordMatches(responseData && responseData.word_matches ? responseData.word_matches : {});
+    updateBdhSubtitle(wordCount);
+
+    const labels = ['Layer 1', 'Layer 2', 'Layer 3', 'Layer 4', 'Layer 5', 'Layer 6', 'Layer 7', 'Layer 8'];
+    const bdhDensity = labels.map((_, i) => {
+      const layerActs = bdhActs.slice(i * 12, (i + 1) * 12);
+      return Math.round(layerActs.filter(x => x > 0).length / layerActs.length * 100);
+    });
+    const tfmDensity = labels.map((_, i) => {
+      const a = genActivations(N, 0.91 + 0.04 * Math.cos(i * 0.8 + tokenSeed(text) % 5), tokenSeed(text) + i * 17 + 500);
+      return Math.round(a.filter(x => x > 0).length / N * 100);
+    });
+
+    if (densityChartInst) densityChartInst.destroy();
+    densityChartInst = new Chart(document.getElementById('densityChart'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'BDH',
+            data: bdhDensity,
+            borderColor: '#1D9E75',
+            backgroundColor: 'rgba(29,158,117,0.06)',
+            tension: 0.4,
+            pointRadius: 4,
+            pointBackgroundColor: '#1D9E75',
+            borderWidth: 2,
+            fill: true,
+          },
+          {
+            label: 'Transformer',
+            data: tfmDensity,
+            borderColor: '#7F77DD',
+            backgroundColor: 'rgba(127,119,221,0.06)',
+            tension: 0.4,
+            pointRadius: 4,
+            pointBackgroundColor: '#7F77DD',
+            borderWidth: 2,
+            fill: true,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            enabled: true,
+            mode: 'index',
+            intersect: false,
+          }
+        },
+        scales: {
+          y: { beginAtZero: true, max: 100 }
+        }
+      }
+    });
+  }
+
   async function fetchRealData(word) {
     try {
       const response = await fetch(`http://127.0.0.1:5001/activate?token=${encodeURIComponent(word)}`);
@@ -1555,6 +1798,7 @@
   }
 
   async function fireTokens(count = true) {
+    if (textMode === 'sentence') return fireSentence(count);
     const token = document.getElementById('tokenInput').value.trim() || 'hello';
     const seed = tokenSeed(token);
 
