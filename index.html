@@ -666,11 +666,64 @@
   .bdh-badge { background: var(--bdh-pale); color: var(--bdh); }
   .tfm-badge { background: var(--tfm-pale); color: var(--tfm); }
 
-  canvas.grid-canvas {
+  .grid-container {
     width: 100%;
+    min-height: 150px;
     border-radius: 8px;
-    display: block;
+    display: grid;
     background: var(--surface2);
+    gap: 2px;
+    padding: 8px;
+    overflow: hidden;
+  }
+  .neuron-cell {
+    min-width: 8px;
+    min-height: 8px;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 3px;
+    transition: transform 0.12s ease, opacity 0.12s ease;
+  }
+  .neuron-cell:hover {
+    transform: scale(1.08);
+  }
+  .neuron-tooltip {
+    position: fixed;
+    z-index: 999;
+    display: none;
+    max-width: 240px;
+    background: rgba(20, 20, 20, 0.95);
+    color: white;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+  }
+  .neuron-tooltip .tooltip-row {
+    margin-bottom: 4px;
+  }
+  .neuron-tooltip .tooltip-row strong {
+    display: block;
+    margin-bottom: 4px;
+  }
+  .tooltip-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+  }
+  .tooltip-badge.active { background: #10B981; color: white; }
+  .tooltip-badge.silent { background: rgba(255,255,255,0.14); color: #E2E8F0; }
+  .tooltip-note {
+    margin-top: 6px;
+    color: #C9D1D9;
+    font-size: 11px;
   }
 
   .stats {
@@ -699,6 +752,28 @@
   }
 
   /* ── LEGEND ── */
+  .concept-legend {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    gap: 10px;
+    margin: 20px 0 12px;
+  }
+  .concept-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 999px;
+    background: rgba(29, 158, 117, 0.08);
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.3;
+    border: 1px solid rgba(29, 158, 117, 0.12);
+  }
+  .concept-pill.tfm {
+    background: rgba(127, 119, 221, 0.09);
+    border-color: rgba(127, 119, 221, 0.15);
+  }
   .legend {
     display: flex;
     gap: 16px;
@@ -937,7 +1012,7 @@
         </div>
         <span class="pct-badge bdh-badge" id="bdhPctBadge">~5%</span>
       </div>
-      <canvas class="grid-canvas" id="bdhGrid" width="300" height="150"></canvas>
+      <div class="grid-container" id="bdhGrid" role="grid" aria-label="BDH neuron activation grid"></div>
       <div class="stats">
         <div class="stat">
           <div class="stat-val" id="bdhFired">—</div>
@@ -961,7 +1036,7 @@
         </div>
         <span class="pct-badge tfm-badge" id="tfmPctBadge">~95%</span>
       </div>
-      <canvas class="grid-canvas" id="tfmGrid" width="300" height="150"></canvas>
+      <div class="grid-container" id="tfmGrid" role="grid" aria-label="Transformer neuron activation grid"></div>
       <div class="stats">
         <div class="stat">
           <div class="stat-val" id="tfmFired">—</div>
@@ -974,6 +1049,18 @@
       </div>
     </div>
   </div>
+
+  <div class="concept-legend" aria-label="Neuron concept legend">
+    <div class="concept-pill">Syntax/structure — neurons 0–10</div>
+    <div class="concept-pill">Semantic meaning — neurons 11–25</div>
+    <div class="concept-pill">Currency / numbers — neurons 26–40</div>
+    <div class="concept-pill">Geography / places — neurons 41–55</div>
+    <div class="concept-pill">Medical / biology — neurons 56–70</div>
+    <div class="concept-pill">Language pattern — neurons 71–90</div>
+    <div class="concept-pill">Abstract reasoning — neurons 91+</div>
+  </div>
+
+  <div id="neuronTooltip" class="neuron-tooltip" aria-hidden="true"></div>
 
   <!-- LEGEND -->
   <div class="legend">
@@ -1373,43 +1460,86 @@
     return arr;
   }
 
-  function drawGrid(canvasId, activations, activeColor, silentColor) {
-    const c = document.getElementById(canvasId);
-    const ctx = c.getContext('2d');
-    const n = activations.length;
-    const cols = Math.ceil(Math.sqrt(n * 2.2));
-    const rows = Math.ceil(n / cols);
-    const pw = c.width / cols;
-    const ph = c.height / rows;
+  function getNeuronConcept(index) {
+    if (index <= 10) return 'Syntax/structure';
+    if (index <= 25) return 'Semantic meaning';
+    if (index <= 40) return 'Currency / numbers';
+    if (index <= 55) return 'Geography / places';
+    if (index <= 70) return 'Medical / biology';
+    if (index <= 90) return 'Language pattern';
+    return 'Abstract reasoning';
+  }
 
-    ctx.clearRect(0, 0, c.width, c.height);
+  function getLayerNumber(index) {
+    return Math.floor(index / 10) + 1;
+  }
+
+  function positionTooltip(evt) {
+    const tooltip = document.getElementById('neuronTooltip');
+    const pad = 12;
+    const rect = tooltip.getBoundingClientRect();
+    let x = evt.clientX + 16;
+    let y = evt.clientY + 16;
+    if (x + rect.width + pad > window.innerWidth) x = window.innerWidth - rect.width - pad;
+    if (y + rect.height + pad > window.innerHeight) y = evt.clientY - rect.height - 16;
+    tooltip.style.left = `${Math.max(8, x)}px`;
+    tooltip.style.top = `${Math.max(8, y)}px`;
+  }
+
+  function formatNeuronTooltip(index, value) {
+    const isActive = value > 0;
+    const concept = getNeuronConcept(index);
+    const layer = getLayerNumber(index);
+    const formattedValue = isActive ? value.toFixed(2) : '0.00 — silent';
+    const statusClass = isActive ? 'tooltip-badge active' : 'tooltip-badge silent';
+    return `
+      <div class="tooltip-row"><strong>Neuron #${index}</strong></div>
+      <div class="tooltip-row">Layer ${layer}</div>
+      <div class="tooltip-row">Activation: ${formattedValue}</div>
+      <div class="tooltip-row"><span class="${statusClass}">${isActive ? 'ACTIVE' : 'SILENT'}</span></div>
+      <div class="tooltip-row">Concept: ${concept}</div>
+      <div class="tooltip-note">${isActive ? 'This neuron is in the active 5%' : 'Part of the silent 95%'}</div>
+    `;
+  }
+
+  function showNeuronTooltip(evt, index, value) {
+    const tooltip = document.getElementById('neuronTooltip');
+    tooltip.innerHTML = formatNeuronTooltip(index, value);
+    tooltip.style.display = 'block';
+    tooltip.setAttribute('aria-hidden', 'false');
+    positionTooltip(evt);
+  }
+
+  function hideNeuronTooltip() {
+    const tooltip = document.getElementById('neuronTooltip');
+    tooltip.style.display = 'none';
+    tooltip.setAttribute('aria-hidden', 'true');
+  }
+
+  function drawGrid(containerId, activations, activeColor, silentColor) {
+    const container = document.getElementById(containerId);
+    const n = activations.length;
+    const cols = Math.ceil(Math.sqrt(n));
+    container.innerHTML = '';
+    container.style.gridTemplateColumns = `repeat(${cols}, minmax(8px, 1fr))`;
+    container.style.gridAutoRows = 'minmax(8px, 1fr)';
 
     for (let i = 0; i < n; i++) {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const v = activations[i];
-      const x = col * pw + 1;
-      const y = row * ph + 1;
-      const w = pw - 2;
-      const h = ph - 2;
-
-      if (v > 0) {
-        const alpha = 0.2 + 0.8 * v;
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = activeColor;
-        ctx.fillRect(x, y, w, h);
-        // glow dot for strongly active neurons
-        if (v > 0.7) {
-          ctx.globalAlpha = 0.25;
-          ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
-        }
-      } else {
-        ctx.globalAlpha = 0.35;
-        ctx.fillStyle = silentColor;
-        ctx.fillRect(x, y, w, h);
-      }
+      const value = activations[i];
+      const active = value > 0;
+      const cell = document.createElement('div');
+      cell.className = 'neuron-cell';
+      cell.dataset.index = i;
+      cell.dataset.value = value.toFixed(4);
+      const alpha = active ? 0.2 + 0.8 * value : 1;
+      cell.style.backgroundColor = active ? activeColor : silentColor;
+      cell.style.opacity = alpha;
+      cell.title = `Neuron #${i} — ${active ? value.toFixed(2) : '0.00 — silent'}`;
+      cell.addEventListener('mouseenter', e => showNeuronTooltip(e, i, value));
+      cell.addEventListener('mousemove', e => positionTooltip(e));
+      cell.addEventListener('mouseleave', hideNeuronTooltip);
+      container.appendChild(cell);
     }
-    ctx.globalAlpha = 1;
   }
 
   async function fetchRealData(word) {
@@ -1442,11 +1572,11 @@
 
     const tfmActs = genActivations(N, 0.935, seed + 77777);
 
-    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const silentCol = isDark ? '#2A2A26' : '#E8E6E0';
+    const bdhSilentColor = '#2A3A30';
+    const tfmSilentColor = '#1A1830';
 
-    drawGrid('bdhGrid', bdhActs, '#1D9E75', silentCol);
-    drawGrid('tfmGrid', tfmActs, '#7F77DD', silentCol);
+    drawGrid('bdhGrid', bdhActs, '#1D9E75', bdhSilentColor);
+    drawGrid('tfmGrid', tfmActs, '#7F77DD', tfmSilentColor);
 
     const bdhFired = bdhActs.filter(x => x > 0).length;
     const tfmFired = tfmActs.filter(x => x > 0).length;
